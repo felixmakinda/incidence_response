@@ -1,0 +1,13 @@
+{
+  "name": "incident-response-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd api && uv run uvicorn main:app --reload --port 8000",
+    "dev:web": "cd web && pnpm dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
