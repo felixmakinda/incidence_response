@@ -3,36 +3,35 @@ import uuid
 from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
-from models.incident import Incident, IncomingEmail, TriggerIncidentRequest, TimelineEvent
+from models.incident import (
+    Incident,
+    IncomingEmail,
+    TriggerIncidentRequest,
+    TimelineEvent,
+)
 from services.incident_store import incident_store
 from services.event_bus import event_bus
 from mock_data.emails import MOCK_EMAILS
-from integrations.google_auth import is_authenticated
+from integrations.gmail_client import is_imap_configured
+from agent.orchestrator import run_incident_agent
 
 router = APIRouter()
 
 
 @router.post("/incidents/trigger")
-async def trigger_incident(request: TriggerIncidentRequest, background_tasks: BackgroundTasks):
-    # If email_id looks like a Gmail message ID (not a mock ID), fetch it from Gmail
-    if request.email_id and not request.email_id.startswith("email_") and is_authenticated():
-        try:
-            from integrations.gmail_client import _service, _parse_message
-            svc = _service()
-            msg = svc.users().messages().get(userId="me", id=request.email_id, format="full").execute()
-            email_data = _parse_message(msg)
-            if not email_data:
-                raise HTTPException(status_code=404, detail="Could not parse Gmail message")
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-    elif request.email_id:
+async def trigger_incident(
+    request: TriggerIncidentRequest, background_tasks: BackgroundTasks
+):
+    if request.email_id:
         email_data = next((e for e in MOCK_EMAILS if e["id"] == request.email_id), None)
         if not email_data:
             raise HTTPException(status_code=404, detail="Email not found")
     else:
         email_data = MOCK_EMAILS[0]
 
-    email = IncomingEmail(**{k: v for k, v in email_data.items() if k in IncomingEmail.model_fields})
+    email = IncomingEmail(
+        **{k: v for k, v in email_data.items() if k in IncomingEmail.model_fields}
+    )
     incident = Incident(
         id=str(uuid.uuid4()),
         email=email,
@@ -51,7 +50,6 @@ async def trigger_incident(request: TriggerIncidentRequest, background_tasks: Ba
     incident_store.create(incident)
 
     # Run agent in background
-    from agent.orchestrator import run_incident_agent
     background_tasks.add_task(run_incident_agent, incident, event_bus)
 
     return {"incident_id": incident.id, "status": "started"}
@@ -78,17 +76,19 @@ async def list_emails(
 ):
     """
     Return emails for the trigger selector.
-    source=auto: real Gmail if authenticated, otherwise mock
+    source=auto: real Gmail IMAP if configured, otherwise mock
     source=mock: always return mock data
-    source=gmail: force real Gmail (errors if not authenticated)
+    source=gmail: force real IMAP (errors if not configured)
     """
-    use_real = (source == "gmail") or (source == "auto" and is_authenticated())
+    use_real = (source == "gmail") or (source == "auto" and is_imap_configured())
 
     if use_real:
-        import asyncio
         from integrations.gmail_client import list_inbox_emails
+
         try:
-            emails = await asyncio.to_thread(list_inbox_emails, max_results, unread_only)
+            emails = await asyncio.to_thread(
+                list_inbox_emails, max_results, unread_only
+            )
             return emails
         except Exception as e:
             if source == "gmail":

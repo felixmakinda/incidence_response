@@ -1,7 +1,7 @@
 MOCK_EMAILS = [
     {
         "id": "email_001",
-        "from_address": "marcus.reid@apexlogistics.com",
+        "from_address": "thundoss@gmail.com",
         "from_company": "Apex Logistics",
         "subject": "URGENT: Login failures affecting all warehouse managers",
         "body": """Hi Support Team,

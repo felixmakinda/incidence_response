@@ -1,20 +1,19 @@
-import asyncio
 import json
 import os
 import time
 import uuid
 from datetime import datetime
 
+from models.incident import AgentThought, Incident, TimelineEvent, ToolCallRecord
 from openai import AsyncOpenAI
-
-from agent.function_definitions import TOOL_DEFINITIONS
-from agent.prompt_builder import SYSTEM_PROMPT, build_incident_context
-from models.incident import Incident, ToolCallRecord, AgentThought, TimelineEvent
 from services.event_bus import EventBus
 from services.incident_store import incident_store
 from tools.registry import tool_registry
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from agent.function_definitions import TOOL_DEFINITIONS
+from agent.prompt_builder import SYSTEM_PROMPT, build_incident_context
+
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 

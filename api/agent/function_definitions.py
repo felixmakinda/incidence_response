@@ -78,7 +78,7 @@ TOOL_DEFINITIONS = [
                     "priority": {"type": "string", "enum": ["P0", "P1", "P2"], "default": "P0"},
                     "assignee": {
                         "type": "string",
-                        "description": "On-call engineer's Jira username (priya.suresh)",
+                        "description": "On-call engineer's Jira username (denis.gathondu)",
                     },
                     "labels": {"type": "array", "items": {"type": "string"}},
                 },

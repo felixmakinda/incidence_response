@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import confetti from "canvas-confetti";
-import { EmailTriggerCard } from "@/components/email/EmailTriggerCard";
 import { AutoTriggerPanel } from "@/components/email/AutoTriggerPanel";
 import { AgentStatusBar } from "@/components/agent/AgentStatusBar";
 import { PipelineView } from "@/components/pipeline/PipelineView";
@@ -12,27 +11,53 @@ import { IncidentTimeline } from "@/components/timeline/IncidentTimeline";
 import { IncidentCompleteOverlay } from "@/components/ui/IncidentCompleteOverlay";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useIncidentStream } from "@/hooks/useIncidentStream";
-import { listEmails, listIncidents } from "@/lib/api";
+import { getIncident, listIncidents } from "@/lib/api";
 import { SEVERITY_COLORS } from "@/lib/constants";
 import clsx from "clsx";
-import type { MockEmail } from "@/types";
 
 export default function DashboardPage() {
-  const [emails, setEmails] = useState<MockEmail[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const { incident, agentStatus, setRecentIncidents } = useIncidentStore();
+  const {
+    incident,
+    agentStatus,
+    recentIncidents,
+    activeIncidentId,
+    setIncident,
+    setRecentIncidents,
+  } = useIncidentStore();
 
-  // Load emails and recent incidents on mount
+  // Poll for new incidents every 10 seconds
   useEffect(() => {
-    listEmails().then(setEmails);
     listIncidents().then(setRecentIncidents);
+    const id = setInterval(() => listIncidents().then(setRecentIncidents), 10_000);
+    return () => clearInterval(id);
   }, [setRecentIncidents]);
 
-  // Subscribe to SSE stream for active incident
+  // Auto-select the newest running incident when the list updates
+  useEffect(() => {
+    if (!recentIncidents.length) return;
+    const running = recentIncidents.find((i) => i.status === "running");
+    const candidate = running ?? recentIncidents[0];
+    if (candidate && candidate.id !== activeId) {
+      setActiveId(candidate.id);
+      getIncident(candidate.id).then(setIncident);
+    }
+    // activeId intentionally omitted — we only want to react to list changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentIncidents, setIncident]);
+
+  // When the user clicks a sidebar incident, switch to it
+  useEffect(() => {
+    if (!activeIncidentId || activeIncidentId === activeId) return;
+    setActiveId(activeIncidentId);
+    getIncident(activeIncidentId).then(setIncident);
+  }, [activeIncidentId, activeId, setIncident]);
+
+  // Subscribe to SSE stream for the active incident
   useIncidentStream(activeId);
 
-  // Fire confetti once when the incident completes
+  // Fire confetti when the incident completes
   useEffect(() => {
     if (agentStatus !== "complete") return;
     const duration = 5 * 1000;
@@ -49,18 +74,11 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [agentStatus]);
 
-  function handleIncidentStarted(id: string) {
-    setActiveId(id);
-    // Refresh sidebar list
-    listIncidents().then(setRecentIncidents);
-  }
-
   return (
     <div className="flex flex-col h-full gap-4 p-5 overflow-y-auto">
-      {/* Top row: email trigger + auto-trigger + status */}
+      {/* Top row: auto-trigger panel + agent status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 flex flex-col gap-3">
-          <EmailTriggerCard emails={emails} onIncidentStarted={handleIncidentStarted} />
+        <div className="lg:col-span-2">
           <AutoTriggerPanel />
         </div>
         <div className="flex flex-col gap-3">
@@ -103,7 +121,6 @@ export default function DashboardPage() {
       {/* Main content: tool cards + thought stream */}
       {incident && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 flex-1">
-          {/* Tool cards grid */}
           <div className="lg:col-span-3 space-y-3">
             <h2 className="text-sm font-semibold text-zinc-800">Tool Actions</h2>
             {incident.tool_calls.length === 0 && (
@@ -116,7 +133,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Thought stream */}
           <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 shadow-sm p-4 flex flex-col min-h-64 max-h-125">
             <AgentThoughtStream thoughts={incident.thoughts} agentStatus={agentStatus} />
           </div>
@@ -130,12 +146,14 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!incident && emails.length > 0 && (
+      {!incident && (
         <div className="flex-1 flex items-center justify-center text-zinc-400">
           <div className="text-center">
-            <p className="text-4xl mb-3">🚨</p>
-            <p className="text-base font-medium text-zinc-600">No active incident</p>
-            <p className="text-sm text-zinc-400">Select an email above and click "Trigger Incident Response"</p>
+            <p className="text-4xl mb-3">📬</p>
+            <p className="text-base font-medium text-zinc-600">Waiting for an incident</p>
+            <p className="text-sm text-zinc-400">
+              The poller checks your inbox every 60 seconds. Incidents will appear here automatically.
+            </p>
           </div>
         </div>
       )}
@@ -155,9 +173,10 @@ function ElapsedTimer({ startedAt, status }: { startedAt: string; status: string
     return () => clearInterval(id);
   }, [startedAt, status]);
 
-  const final = status === "complete" || status === "failed"
-    ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
-    : elapsed;
+  const final =
+    status === "complete" || status === "failed"
+      ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
+      : elapsed;
 
   return <span>{final}s elapsed</span>;
 }
