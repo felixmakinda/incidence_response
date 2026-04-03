@@ -17,10 +17,14 @@ from models.incident import Incident, IncomingEmail, TimelineEvent
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "60"))
 SCREENING_THRESHOLD = float(os.getenv("SCREENING_THRESHOLD", "0.70"))
 
-# Tracks IMAP message IDs already processed in this server session
-_processed_ids: set[str] = set()
+# Tracks IMAP message IDs already processed in this server session.
+# Using a plain dict (insertion-ordered since Python 3.7) so we can evict
+# the oldest entries without clearing everything when the cap is hit.
+_processed_ids: dict[str, bool] = {}
 _retries: defaultdict[str, int] = defaultdict(int)
 _max_retries: int = int(os.getenv("MAX_RETRIES", "3"))
+_PROCESSED_CAP = 2000
+_PROCESSED_EVICT = 500  # how many oldest entries to drop when cap is reached
 
 _poller_state: dict = {
     "running": False,
@@ -47,8 +51,11 @@ async def poll_once(event_bus, incident_store) -> None:
         # Skip already-processed messages
         if msg_id in _processed_ids or _retries[msg_id] >= _max_retries:
             continue
-        if len(_processed_ids) > 2000:
-            _processed_ids.clear()
+        if len(_processed_ids) >= _PROCESSED_CAP:
+            oldest = list(_processed_ids.keys())[:_PROCESSED_EVICT]
+            for key in oldest:
+                del _processed_ids[key]
+                _retries.pop(key, None)
 
         subject = email_data.get("subject", "")
         body = email_data.get("body", "")
@@ -68,7 +75,7 @@ async def poll_once(event_bus, incident_store) -> None:
             _retries[msg_id] += 1
             continue
 
-        _processed_ids.add(msg_id)
+        _processed_ids[msg_id] = True
 
         if not screening.get("passes_threshold"):
             continue
