@@ -7,6 +7,7 @@ via LLM, and auto-triggers an incident agent if it passes the threshold.
 import asyncio
 import os
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from agent.screener import screen_email
@@ -18,6 +19,8 @@ SCREENING_THRESHOLD = float(os.getenv("SCREENING_THRESHOLD", "0.70"))
 
 # Tracks IMAP message IDs already processed in this server session
 _processed_ids: set[str] = set()
+_retries: defaultdict[str, int] = defaultdict(int)
+_max_retries: int = int(os.getenv("MAX_RETRIES", "3"))
 
 _poller_state: dict = {
     "running": False,
@@ -42,9 +45,8 @@ async def poll_once(event_bus, incident_store) -> None:
         msg_id = email_data["id"]
 
         # Skip already-processed messages
-        if msg_id in _processed_ids:
+        if msg_id in _processed_ids or _retries[msg_id] >= _max_retries:
             continue
-        _processed_ids.add(msg_id)
         if len(_processed_ids) > 2000:
             _processed_ids.clear()
 
@@ -63,15 +65,15 @@ async def poll_once(event_bus, incident_store) -> None:
             )
         except Exception as e:
             _poller_state["last_error"] = f"Screener error: {e}"
-            # Mark read so we don't retry a broken email repeatedly
-            await asyncio.to_thread(mark_as_read, msg_id)
+            _retries[msg_id] += 1
             continue
 
-        # Always mark as read to prevent re-scanning on next poll
-        await asyncio.to_thread(mark_as_read, msg_id)
+        _processed_ids.add(msg_id)
 
         if not screening.get("passes_threshold"):
             continue
+        # Always mark if it passes the threshold
+        await asyncio.to_thread(mark_as_read, msg_id)
 
         # Build and store the incident
         email = IncomingEmail(
