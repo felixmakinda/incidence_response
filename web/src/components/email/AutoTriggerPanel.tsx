@@ -37,7 +37,7 @@ export function AutoTriggerPanel() {
   useEffect(() => {
     async function fetchStatus() {
       try {
-        const res = await fetch("/api/gmail/watch");
+        const res = await fetch(`${API_BASE}/api/watch/status`);
         if (res.ok) {
           const data = await res.json();
           setStatus(data);

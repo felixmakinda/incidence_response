@@ -15,7 +15,7 @@ from typing import Optional
 
 
 def _imap_connect() -> imaplib.IMAP4_SSL:
-    host = int(os.getenv("IMAP_EMAIL_HOST"))
+    host = os.getenv("IMAP_EMAIL_HOST")
     port = int(os.getenv("IMAP_PORT") or "993")
     user = os.getenv("FROM_EMAIL")
     password = os.getenv("GOOGLE_APP_PASSWORD")
