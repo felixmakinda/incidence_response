@@ -1,6 +1,6 @@
 # Incident Response — AI-Powered Incident Automation
 
-An AI agent that automatically executes a full production incident response the moment a critical alert email arrives. The agent reasons step-by-step and orchestrates six external tools in the correct dependency order, streaming every decision and action live to a web dashboard.
+An AI agent that automatically detects critical alert emails via IMAP polling, classifies them with an LLM screener, and executes a full production incident response. The agent reasons step-by-step and orchestrates six external tools in the correct dependency order, streaming every decision and action live to a web dashboard.
 
 ---
 
@@ -8,7 +8,7 @@ An AI agent that automatically executes a full production incident response the 
 
 When a P0 customer email is detected, the system:
 
-1. **Replies to the customer** via Gmail — empathetic acknowledgement with ETA
+1. **Replies to the customer** via Gmail SMTP — empathetic acknowledgement with ETA
 2. **Creates a Google Meet war room** — instant video link for the response team
 3. **Schedules a Google Calendar event** — war room invite sent to all attendees
 4. **Files a Jira ticket** — assigned to the on-call engineer with full incident context
@@ -22,18 +22,21 @@ All six steps happen automatically in under 60 seconds. Every tool call, agent t
 ## Architecture
 
 ```
+Gmail inbox  (new email arrives)
+    │
+    ▼
+IMAP Poller  — background task, runs every 60 seconds
+    │  fetches UNSEEN emails
+    ▼
+GPT-4o-mini screener
+    │  confidence >= 70%?
+    ├── No  → leave unread, skip (non-incident emails are never marked as read)
+    └── Yes → mark as read, create incident, run agent
+                    │
+                    ▼
 ┌─────────────────────────────────────────────────────┐
-│                   Next.js Frontend                  │
-│  Dashboard  ←── SSE Stream ──  useIncidentStream    │
-│  (React + Zustand)              (EventSource)       │
-└─────────────────────┬───────────────────────────────┘
-                      │ REST + SSE
-┌─────────────────────▼───────────────────────────────┐
 │                  FastAPI Backend                     │
 │                                                     │
-│  POST /api/incidents/trigger                        │
-│       │                                             │
-│       ▼                                             │
 │  ┌──────────────────────────────────────────────┐   │
 │  │            Agent Orchestrator               │   │
 │  │  GPT-4o  ←→  Tool Definitions  ←→  Tools   │   │
@@ -50,18 +53,17 @@ All six steps happen automatically in under 60 seconds. Every tool call, agent t
 │    │  slack  docs                        │          │
 │    │  each: _real() or _mock()           │          │
 │    └─────────────────────────────────────┘          │
+└──────────────────────┬──────────────────────────────┘
+                       │ REST + SSE
+┌──────────────────────▼──────────────────────────────┐
+│                   Next.js Frontend                  │
+│  Dashboard  ←── SSE Stream ──  useIncidentStream    │
+│  (React + Zustand)              (EventSource)       │
+│                                                     │
+│  Polls listIncidents() every 10s — auto-selects     │
+│  newest running incident and opens SSE stream       │
 └─────────────────────────────────────────────────────┘
-         │           │           │           │
-      Gmail       G-Meet     G-Calendar   G-Docs
-       Jira        Slack
 ```
-
-### Trigger Modes
-
-| Mode | How |
-|------|-----|
-| **Manual** | Select a scenario email on the dashboard and click "Trigger Incident Response" |
-| **Auto** | Gmail watch + Google Pub/Sub delivers real emails → LLM screener decides if it's an incident |
 
 ---
 
@@ -71,6 +73,8 @@ All six steps happen automatically in under 60 seconds. Every tool call, agent t
 |-------|-----------|
 | AI Agent | OpenAI GPT-4o (streaming, function calling) |
 | LLM Screener | GPT-4o-mini |
+| Email sending | Python `smtplib` (SMTP + App Password) |
+| Email reading | Python `imaplib` (IMAP + App Password) |
 | Backend | FastAPI (Python 3.12), uvicorn, SSE |
 | Frontend | Next.js 15, React, Zustand, Tailwind CSS |
 | Package manager (API) | uv |
@@ -89,9 +93,8 @@ incidence_response/
 │   │   ├── prompt_builder.py     # System prompt + per-incident context builder
 │   │   └── function_definitions.py  # OpenAI tool schemas for all six tools
 │   ├── integrations/             # Raw API clients (one file per service)
-│   │   ├── gmail_client.py
-│   │   ├── gmail_watch.py        # Gmail Pub/Sub watch management
-│   │   ├── google_auth.py        # OAuth2 flow
+│   │   ├── gmail_client.py       # IMAP inbox reader + SMTP reply sender
+│   │   ├── google_auth.py        # OAuth2 flow (Calendar, Meet, Docs)
 │   │   ├── google_calendar_client.py
 │   │   ├── google_docs_client.py
 │   │   ├── jira_client.py
@@ -106,14 +109,15 @@ incidence_response/
 │   │   ├── slack.py
 │   │   └── google_docs.py
 │   ├── routers/
-│   │   ├── incidents.py          # POST /trigger, GET /list, GET /{id}
+│   │   ├── incidents.py          # GET /list, GET /{id}, GET /emails
 │   │   ├── stream.py             # GET /{id}/stream  (SSE)
 │   │   ├── auth.py               # GET /auth/google (OAuth flow)
-│   │   └── webhook.py            # POST /webhook/gmail (Pub/Sub receiver)
+│   │   └── webhook.py            # POST /webhook/gmail, GET /watch/status
 │   ├── models/                   # Pydantic data models
 │   ├── services/
 │   │   ├── incident_store.py     # In-memory incident state
-│   │   └── event_bus.py          # SSE event publisher
+│   │   ├── event_bus.py          # SSE event publisher
+│   │   └── inbox_poller.py       # Background IMAP polling loop
 │   └── mock_data/
 │       └── emails.py             # Sample incident emails + on-call engineer
 └── web/                          # Next.js frontend
@@ -121,7 +125,7 @@ incidence_response/
         ├── app/dashboard/        # Main dashboard page
         ├── components/
         │   ├── agent/            # AgentStatusBar, AgentThoughtStream
-        │   ├── email/            # EmailTriggerCard, AutoTriggerPanel
+        │   ├── email/            # AutoTriggerPanel (IMAP/SMTP status)
         │   ├── pipeline/         # PipelineView (step progress bar)
         │   ├── timeline/         # IncidentTimeline
         │   ├── tools/            # ToolCard, ToolStatusBadge
@@ -138,6 +142,15 @@ incidence_response/
 ---
 
 ## How the Agent Works
+
+### Automatic Trigger Flow
+
+1. `inbox_poller.py` runs as a background `asyncio.Task` from server startup
+2. Every 60 seconds it fetches UNSEEN emails via IMAP
+3. Each email is sent to GPT-4o-mini for incident classification
+4. Emails that pass the confidence threshold (default 70%) create an `Incident` and start the agent
+5. Confirmed incident emails are marked as read; non-incidents are left untouched in Gmail
+6. The dashboard polls `listIncidents()` every 10 seconds and auto-connects the SSE stream when a new running incident appears
 
 ### Agent Loop (`api/agent/orchestrator.py`)
 
@@ -225,33 +238,6 @@ On completion, the dashboard fires a 5-second confetti fireworks animation and a
 
 ---
 
-## Auto-Trigger: Gmail Watch
-
-When enabled, the system monitors your Gmail inbox automatically.
-
-```
-Gmail inbox
-    │  (new email arrives)
-    ▼
-Google Pub/Sub topic
-    │  (push notification)
-    ▼
-Next.js /api/gmail/webhook  (public Vercel URL)
-    │  (decodes + forwards)
-    ▼
-FastAPI POST /api/webhook/gmail
-    │
-    ▼
-GPT-4o-mini screener
-    │  confidence >= 70%?
-    ├── No  → filtered, ignored
-    └── Yes → incident created, agent runs
-```
-
-The screener classifies incoming email as an incident if it describes a production outage, data loss, security issue, or monitoring alert. Sales emails, support questions, and billing queries are filtered out.
-
----
-
 ## Setup
 
 ### Prerequisites
@@ -261,6 +247,7 @@ The screener classifies incoming email as an incident if it describes a producti
 - `uv` — `pip install uv`
 - `pnpm` — `npm install -g pnpm`
 - OpenAI API key
+- A Gmail account with [App Passwords](https://myaccount.google.com/apppasswords) enabled (requires 2FA)
 
 ### 1 — Clone and install
 
@@ -277,23 +264,22 @@ cd ../web && pnpm install
 
 ### 2 — Configure environment
 
-Edit `api/.env`. Only `OPENAI_API_KEY` is required. Every missing credential causes that tool to fall back to mock mode.
+Edit `api/.env`. The minimum required to run with real email detection:
 
 ```env
+# Required — AI brain
 OPENAI_API_KEY=sk-...
 
-JIRA_BASE_URL=https://yourorg.atlassian.net
-JIRA_EMAIL=you@yourorg.com
-JIRA_API_TOKEN=...
-JIRA_PROJECT_KEY=SCRUM
-JIRA_ISSUE_TYPE=Task
-
-SLACK_BOT_TOKEN=xoxb-...
-
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+# Required — inbox polling and customer reply
+FROM_EMAIL=your-email@gmail.com
+GOOGLE_APP_PASSWORD=your-app-password
+SMTP_EMAIL_HOST=smtp.gmail.com
+SMTP_PORT=465
+IMAP_EMAIL_HOST=imap.gmail.com
+IMAP_PORT=993
 ```
+
+Every other credential (Jira, Slack, Google OAuth) is optional — missing ones fall back to mock mode.
 
 ### 3 — Run
 
@@ -310,30 +296,48 @@ cd web  && pnpm dev
 |-----|------|
 | `http://localhost:3000` | Dashboard |
 | `http://localhost:8000/docs` | FastAPI interactive API docs |
-| `http://localhost:8000/api/auth/google` | Start Google OAuth flow |
+| `http://localhost:8000/api/auth/google` | Start Google OAuth flow (Calendar/Meet/Docs) |
+
+### 4 — Verify the poller is running
+
+Open the dashboard. The **Auto-Trigger** panel shows three status chips:
+
+- **IMAP** — green when `IMAP_EMAIL_HOST`, `FROM_EMAIL`, and `GOOGLE_APP_PASSWORD` are set
+- **SMTP** — green when `SMTP_EMAIL_HOST`, `FROM_EMAIL`, and `GOOGLE_APP_PASSWORD` are set
+- **Poller** — green when the background polling loop is active
+
+Once IMAP is green, send a test incident email to your inbox. The dashboard will automatically show the incident within 60 seconds.
 
 ---
 
 ## Environment Variables
 
-| Variable | Used by | Where to get it |
-|----------|---------|----------------|
-| `OPENAI_API_KEY` | Agent, Screener | platform.openai.com |
-| `OPENAI_MODEL` | Agent | Default: `gpt-4o` |
-| `SCREENER_MODEL` | Screener | Default: `gpt-4o-mini` |
-| `GOOGLE_CLIENT_ID` | Gmail, Calendar, Meet, Docs | console.cloud.google.com → OAuth 2.0 |
-| `GOOGLE_CLIENT_SECRET` | Gmail, Calendar, Meet, Docs | Same |
-| `GOOGLE_REDIRECT_URI` | Google OAuth | Must match authorized redirect URI |
-| `SLACK_BOT_TOKEN` | Slack | api.slack.com/apps → OAuth & Permissions |
-| `JIRA_BASE_URL` | Jira | Your Atlassian instance URL |
-| `JIRA_EMAIL` | Jira | Atlassian account email |
-| `JIRA_API_TOKEN` | Jira | id.atlassian.com → Security → API tokens |
-| `JIRA_PROJECT_KEY` | Jira | Project key, e.g. `INC` or `SCRUM` |
-| `JIRA_ISSUE_TYPE` | Jira | Default: `Task` (use `Incident` for service desk projects) |
-| `GMAIL_PUBSUB_TOPIC` | Auto-trigger | GCP Pub/Sub topic name |
-| `GMAIL_PUBSUB_TOKEN` | Auto-trigger | Token for Pub/Sub push verification |
-| `WEBHOOK_SECRET` | Auto-trigger | Shared secret between Next.js forwarder and FastAPI |
-| `SCREENING_THRESHOLD` | Auto-trigger | Confidence cutoff 0–1 (default: `0.70`) |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OPENAI_API_KEY` | ✅ | — | OpenAI API key |
+| `OPENAI_MODEL` | | `gpt-4o` | Model for the agent |
+| `OPENAI_BASE_URL` | | — | Override for OpenAI-compatible APIs |
+| `SCREENER_MODEL` | | `gpt-4o-mini` | Model for email classification |
+| `FROM_EMAIL` | ✅ | — | Gmail address used for IMAP and SMTP |
+| `GOOGLE_APP_PASSWORD` | ✅ | — | Gmail App Password (not your account password) |
+| `SMTP_EMAIL_HOST` | | `smtp.gmail.com` | SMTP server hostname |
+| `SMTP_PORT` | | `465` | SMTP SSL port |
+| `IMAP_EMAIL_HOST` | | `imap.gmail.com` | IMAP server hostname |
+| `IMAP_PORT` | | `993` | IMAP SSL port |
+| `POLL_INTERVAL_SECONDS` | | `60` | How often the poller checks for new emails |
+| `SCREENING_THRESHOLD` | | `0.70` | Minimum LLM confidence to trigger an incident |
+| `MAX_RETRIES` | | `3` | Max screener retries per email before giving up |
+| `WEBHOOK_SECRET` | | — | Shared secret for `POST /api/webhook/gmail` |
+| `SLACK_BOT_TOKEN` | | — | Slack Bot User OAuth Token |
+| `JIRA_BASE_URL` | | — | Atlassian instance URL |
+| `JIRA_EMAIL` | | — | Atlassian account email |
+| `JIRA_API_TOKEN` | | — | Atlassian API token |
+| `JIRA_PROJECT_KEY` | | `INC` | Jira project key |
+| `JIRA_ISSUE_TYPE` | | `Task` | `Task`/`Bug` for Scrum, `Incident` for service desk |
+| `GOOGLE_CLIENT_ID` | | — | Google OAuth client ID (Calendar/Meet/Docs) |
+| `GOOGLE_CLIENT_SECRET` | | — | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | | `http://localhost:8000/api/auth/google/callback` | OAuth redirect URI |
+| `GOOGLE_TOKEN_PATH` | | `.google_token.json` | Where OAuth token is persisted |
 
 ---
 
@@ -343,43 +347,40 @@ cd web  && pnpm dev
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/incidents/trigger` | Trigger an incident from an email ID |
 | `GET` | `/api/incidents/` | List recent incidents |
 | `GET` | `/api/incidents/{id}` | Get a single incident with full state |
 | `GET` | `/api/incidents/{id}/stream` | SSE stream for live updates |
-| `GET` | `/api/emails/` | List available emails (real Gmail or mock) |
+| `GET` | `/api/emails/` | List available emails (real IMAP or mock) |
 
-### Auth & Watch
+### Auth & Status
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/auth/google` | Start Google OAuth2 flow |
+| `GET` | `/api/auth/google` | Start Google OAuth2 flow (Calendar/Meet/Docs) |
 | `GET` | `/api/auth/google/callback` | OAuth2 callback — set this as your redirect URI |
-| `POST` | `/api/watch/start` | Start Gmail inbox watch |
-| `POST` | `/api/watch/stop` | Stop Gmail inbox watch |
-| `GET` | `/api/watch/status` | Watch + auth status |
+| `GET` | `/api/watch/status` | IMAP/SMTP config + live poller state |
 
 ### Webhooks
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/webhook/gmail` | Receive decoded email from the Next.js Pub/Sub forwarder |
-| `POST` | `/api/webhook/gmail/pubsub` | Receive Pub/Sub push directly (when FastAPI is public) |
+| `POST` | `/api/webhook/gmail` | Receive a decoded email payload and screen + trigger it |
 
 ---
 
-## Dashboard Components
+## Dashboard
 
 | Component | What it shows |
 |-----------|--------------|
-| Email Trigger Card | Select a scenario and manually start the agent |
-| Auto-Trigger Panel | Toggle Gmail watch; shows auth and Pub/Sub status |
+| Auto-Trigger Panel | IMAP/SMTP config status, poller running state, last-checked time, email/incident counters |
 | Agent Status Bar | Live agent state with SVG status icon |
 | Response Pipeline | Step-by-step progress nodes with dependency arrows |
 | Tool Actions | Per-tool card showing status, params, result, and duration |
 | Agent Thought Stream | Real-time GPT-4o reasoning log, colour-coded by type |
 | Incident Timeline | Chronological dot-and-line event list |
 | Completion Overlay | Zoom-float card listing every completed action |
+
+The dashboard polls for new incidents every 10 seconds and automatically opens the SSE stream for the newest running incident. Clicking an older incident in the sidebar switches the live view to that incident.
 
 ---
 
