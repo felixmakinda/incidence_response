@@ -8,7 +8,24 @@ load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
+    from integrations.gmail_client import is_imap_configured
+    from services.inbox_poller import start_poller
+    from services.event_bus import event_bus
+    from services.incident_store import incident_store
+
+    task = None
+    if is_imap_configured():
+        task = asyncio.create_task(start_poller(event_bus, incident_store))
+
     yield
+
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Incident Response Agent API", version="1.0.0", lifespan=lifespan)

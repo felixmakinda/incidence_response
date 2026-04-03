@@ -118,6 +118,8 @@ async def gmail_webhook(
 
 @router.get("/watch/status")
 async def watch_status():
+    from services.inbox_poller import get_poller_status
+
     return {
         "imap_configured": bool(
             os.getenv("IMAP_EMAIL_HOST")
@@ -132,4 +134,5 @@ async def watch_status():
         "imap_host": os.getenv("IMAP_EMAIL_HOST", ""),
         "screening_threshold": SCREENING_THRESHOLD,
         "processed_message_count": len(_processed_message_ids),
+        "poller": get_poller_status(),
     }
