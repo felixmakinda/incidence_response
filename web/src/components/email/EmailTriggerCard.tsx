@@ -44,7 +44,7 @@ export function EmailTriggerCard({ emails, onIncidentStarted }: EmailTriggerCard
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
         <div className="flex items-center gap-2">
-          <span className="text-lg">📬</span>
+          <img src="/svgs/mailbox.svg" className="w-5 h-5" alt="" />
           <span className="text-sm font-semibold text-zinc-800">Incoming Customer Email</span>
           <Badge variant="danger">P0 Trigger</Badge>
         </div>
@@ -65,10 +65,10 @@ export function EmailTriggerCard({ emails, onIncidentStarted }: EmailTriggerCard
               <select
                 value={selectedEmailId}
                 onChange={(e) => setSelectedEmailId(e.target.value)}
-                className="text-sm border border-zinc-200 rounded-lg px-3 py-1.5 w-full bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="text-sm text-zinc-800 border border-zinc-200 rounded-lg px-3 py-1.5 w-full bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
                 {emails.map((e) => (
-                  <option key={e.id} value={e.id}>
+                  <option key={e.id} value={e.id} className="bg-white text-zinc-800">
                     {e.from_company} — {e.subject.slice(0, 50)}
                   </option>
                 ))}

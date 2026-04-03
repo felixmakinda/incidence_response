@@ -18,17 +18,17 @@ export function AutoTriggerPanel() {
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
 
-  async function fetchStatus() {
-    try {
-      const res = await fetch("/api/gmail/watch");
-      if (res.ok) {
-        const data = await res.json();
-        setStatus(data);
-      }
-    } catch {}
-  }
-
   useEffect(() => {
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/gmail/watch");
+        if (res.ok) {
+          const data = await res.json();
+          setStatus(data);
+        }
+      } catch {}
+    }
+
     fetchStatus();
     const id = setInterval(fetchStatus, 15000);
     return () => clearInterval(id);

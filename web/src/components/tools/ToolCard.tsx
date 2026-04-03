@@ -7,12 +7,12 @@ import { TOOL_DISPLAY } from "@/lib/constants";
 import type { ToolCallRecord } from "@/types";
 
 const TOOL_ICONS: Record<string, string> = {
-  gmail: "📧",
-  meet: "📹",
-  calendar: "📅",
-  jira: "🎯",
-  slack: "💬",
-  docs: "📄",
+  gmail: "/svgs/gmail.svg",
+  meet: "/svgs/google-meet.svg",
+  calendar: "/svgs/google-calendar.svg",
+  jira: "/svgs/jira.svg",
+  slack: "/svgs/slack.svg",
+  docs: "/svgs/google-docs.svg",
 };
 
 interface ToolCardProps {
@@ -29,7 +29,7 @@ export function ToolCard({ toolCall }: ToolCardProps) {
     bgColor: "bg-zinc-50",
     borderColor: "border-zinc-200",
   };
-  const icon = TOOL_ICONS[toolCall.icon] || "🔧";
+  const icon = TOOL_ICONS[toolCall.icon];
   const isActive = toolCall.status === "running" || toolCall.status === "success";
 
   return (
@@ -46,7 +46,10 @@ export function ToolCard({ toolCall }: ToolCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-xl">{icon}</span>
+          {icon
+            ? <img src={icon} className="w-8 h-8" alt="" />
+            : <span className="text-xl">🔧</span>
+          }
           <div>
             <p className={clsx("text-sm font-semibold", display.color)}>{toolCall.display_name}</p>
             {toolCall.depends_on.length > 0 && (

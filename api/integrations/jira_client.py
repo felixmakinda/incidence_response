@@ -53,7 +53,7 @@ def create_ticket(
                     }
                 ],
             },
-            "issuetype": {"name": "Incident"},
+            "issuetype": {"name": os.getenv("JIRA_ISSUE_TYPE", "Task")},
             "priority": {"name": jira_priority},
             "labels": labels or ["incident", "p0"],
         }

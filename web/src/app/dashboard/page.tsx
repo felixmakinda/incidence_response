@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import confetti from "canvas-confetti";
 import { EmailTriggerCard } from "@/components/email/EmailTriggerCard";
 import { AutoTriggerPanel } from "@/components/email/AutoTriggerPanel";
 import { AgentStatusBar } from "@/components/agent/AgentStatusBar";
@@ -8,6 +9,7 @@ import { PipelineView } from "@/components/pipeline/PipelineView";
 import { ToolCard } from "@/components/tools/ToolCard";
 import { AgentThoughtStream } from "@/components/agent/AgentThoughtStream";
 import { IncidentTimeline } from "@/components/timeline/IncidentTimeline";
+import { IncidentCompleteOverlay } from "@/components/ui/IncidentCompleteOverlay";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useIncidentStream } from "@/hooks/useIncidentStream";
 import { listEmails, listIncidents } from "@/lib/api";
@@ -30,6 +32,23 @@ export default function DashboardPage() {
   // Subscribe to SSE stream for active incident
   useIncidentStream(activeId);
 
+  // Fire confetti once when the incident completes
+  useEffect(() => {
+    if (agentStatus !== "complete") return;
+    const duration = 5 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+    const interval = window.setInterval(() => {
+      const timeLeft = animationEnd - Date.now();
+      if (timeLeft <= 0) return clearInterval(interval);
+      const particleCount = 50 * (timeLeft / duration);
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+    }, 250);
+    return () => clearInterval(interval);
+  }, [agentStatus]);
+
   function handleIncidentStarted(id: string) {
     setActiveId(id);
     // Refresh sidebar list
@@ -46,6 +65,10 @@ export default function DashboardPage() {
         </div>
         <div className="flex flex-col gap-3">
           <AgentStatusBar status={agentStatus} />
+          <IncidentCompleteOverlay
+            show={agentStatus === "complete"}
+            toolCalls={incident?.tool_calls ?? []}
+          />
           {incident && (
             <div className="bg-white rounded-xl border border-zinc-200 px-4 py-3 space-y-1">
               <div className="flex items-center gap-2">
