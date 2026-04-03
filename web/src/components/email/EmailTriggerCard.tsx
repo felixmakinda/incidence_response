@@ -27,7 +27,7 @@ export function EmailTriggerCard({ emails, onIncidentStarted }: EmailTriggerCard
     if (!selectedEmail) return;
     setLoading(true);
     try {
-      const { incident_id } = await triggerIncident(selectedEmail.id, "P0");
+      const { incident_id } = await triggerIncident(selectedEmail, "P0");
       // Fetch initial incident snapshot and store it
       const incident: Incident = await getIncident(incident_id);
       setIncident(incident);

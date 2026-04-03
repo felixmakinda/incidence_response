@@ -50,22 +50,38 @@ This is a SEV-1 incident for us. We need a war room set up immediately.
 ]
 
 MOCK_CONTACTS = {
-    "priya.suresh": {
-        "name": "Priya Suresh",
-        "email": "priya.suresh@meridian.io",
+    "felix.makinda": {
+        "name": "Felix Makinda",
+        "email": "mogendifelix6@gmail.com",
+        "role": "Engineering Manager",
+        "slack_handle": "@felix.makinda",
+        "jira_username": "felix.makinda",
+        "is_oncall": False,
+    },
+    "denis.gathondu": {
+        "name": "Denis Gathondu",
+        "email": "thundoss@gmail.com",
         "role": "Senior SRE",
-        "slack_handle": "@priya.suresh",
-        "jira_username": "priya.suresh",
+        "slack_handle": "@denis.gathondu",
+        "jira_username": "denis.gathondu",
         "is_oncall": True,
     },
-    "devon.park": {
-        "name": "Devon Park",
-        "email": "devon.park@meridian.io",
+    "yaqub.adesola": {
+        "name": "Yaqub Adesola",
+        "email": "yaqub.adesola@gmail.com",
         "role": "Backend Engineer",
-        "slack_handle": "@devon.park",
-        "jira_username": "devon.park",
+        "slack_handle": "@yaqub.adesola",
+        "jira_username": "yaqub.adesola",
+        "is_oncall": False,
+    },
+    "briah.mukhwaya": {
+        "name": "Briah Mukhwaya",
+        "email": "himora@gmail.com",
+        "role": "Backend Engineer",
+        "slack_handle": "@briah.mukhwaya",
+        "jira_username": "briah.mukhwaya",
         "is_oncall": False,
     },
 }
 
-ONCALL_ENGINEER = MOCK_CONTACTS["priya.suresh"]
+ONCALL_ENGINEER = MOCK_CONTACTS["denis.gathondu"]

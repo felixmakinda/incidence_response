@@ -69,27 +69,25 @@ def create_calendar_event(
 
     attendee_list = [{"email": a} for a in attendees]
 
-    # Embed Meet URL in conference data entry points
+    # Embed the existing Meet URL via location + description.
+    # conferenceSolution is read-only; setting it without createRequest causes API errors.
+    full_description = f"War Room (Google Meet): {meet_url}"
+    if description:
+        full_description = f"{description}\n\n{full_description}"
+
     event = {
         "summary": title,
-        "description": description,
+        "description": full_description,
+        "location": meet_url,
         "start": {"dateTime": now.isoformat(), "timeZone": "UTC"},
         "end": {"dateTime": end.isoformat(), "timeZone": "UTC"},
         "attendees": attendee_list,
-        "conferenceData": {
-            "conferenceSolution": {
-                "name": "Google Meet",
-                "key": {"type": "hangoutsMeet"},
-            },
-            "entryPoints": [{"entryPointType": "video", "uri": meet_url, "label": "Join War Room"}],
-        },
         "sendUpdates": "all",
     }
 
     created = svc.events().insert(
         calendarId="primary",
         body=event,
-        conferenceDataVersion=1,
         sendUpdates="all",
     ).execute()
 

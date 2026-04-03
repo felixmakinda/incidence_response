@@ -13,7 +13,7 @@ client = AsyncOpenAI(
 )
 
 SCREENER_PROMPT = """\
-You are an incident classification assistant for Meridian SaaS, a B2B SaaS platform.
+You are an incident classification assistant for Squad3 Meridian SaaS, a B2B SaaS platform.
 
 Your job is to read an incoming email and decide whether it represents a genuine production incident that requires an immediate automated response.
 

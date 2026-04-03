@@ -24,14 +24,27 @@ async def trigger_incident(
 ):
     if request.email_id:
         email_data = next((e for e in MOCK_EMAILS if e["id"] == request.email_id), None)
-        if not email_data:
-            raise HTTPException(status_code=404, detail="Email not found")
     else:
-        email_data = MOCK_EMAILS[0]
+        email_data = None
 
-    email = IncomingEmail(
-        **{k: v for k, v in email_data.items() if k in IncomingEmail.model_fields}
-    )
+    if email_data:
+        email = IncomingEmail(
+            **{k: v for k, v in email_data.items() if k in IncomingEmail.model_fields}
+        )
+    elif request.from_address and request.subject and request.body:
+        # Real email passed inline (e.g. from IMAP inbox)
+        email = IncomingEmail(
+            id=request.email_id or str(uuid.uuid4()),
+            from_address=request.from_address,
+            from_company=request.from_company or "",
+            subject=request.subject,
+            body=request.body,
+        )
+    else:
+        # Fallback to first mock email
+        email = IncomingEmail(
+            **{k: v for k, v in MOCK_EMAILS[0].items() if k in IncomingEmail.model_fields}
+        )
     incident = Incident(
         id=str(uuid.uuid4()),
         email=email,

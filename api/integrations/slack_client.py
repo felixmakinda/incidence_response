@@ -16,6 +16,13 @@ def is_configured() -> bool:
     return bool(os.getenv("SLACK_BOT_TOKEN"))
 
 
+def _jira_ticket_url(ticket_id: str) -> str:
+    base = os.getenv("JIRA_BASE_URL", "").rstrip("/")
+    if base:
+        return f"{base}/browse/{ticket_id}"
+    return ticket_id  # fallback: just show the ID if Jira isn't configured
+
+
 def post_message(channel: str, message: str, jira_ticket_id: str, meet_url: str) -> dict:
     """Post an incident notification to a Slack channel."""
     client = _client()
@@ -34,7 +41,7 @@ def post_message(channel: str, message: str, jira_ticket_id: str, meet_url: str)
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": f"*Jira Ticket:*\n<https://meridian.atlassian.net/browse/{jira_ticket_id}|{jira_ticket_id}>"},
+                {"type": "mrkdwn", "text": f"*Jira Ticket:*\n<{_jira_ticket_url(jira_ticket_id)}|{jira_ticket_id}>"},
                 {"type": "mrkdwn", "text": f"*War Room:*\n<{meet_url}|Join Google Meet>"},
             ],
         },

@@ -4,12 +4,21 @@ import { useEffect, useState } from "react";
 import type { ToolCallRecord } from "@/types";
 
 const TOOL_META: Record<string, { icon: string; label: string }> = {
-  gmail_reply:          { icon: "/svgs/gmail.svg",           label: "Customer Notified" },
-  create_meet_link:     { icon: "/svgs/google-meet.svg",     label: "War Room Created" },
-  create_calendar_event:{ icon: "/svgs/google-calendar.svg", label: "Meeting Scheduled" },
-  create_jira_ticket:   { icon: "/svgs/jira.svg",            label: "Ticket Filed" },
-  post_slack_message:   { icon: "/svgs/slack.svg",           label: "Team Alerted" },
-  create_google_doc:    { icon: "/svgs/google-docs.svg",     label: "Runbook Created" },
+  gmail_reply: { icon: "/svgs/gmail.svg", label: "Customer Notified" },
+  create_meet_link: {
+    icon: "/svgs/google-meet.svg",
+    label: "War Room Created",
+  },
+  create_calendar_event: {
+    icon: "/svgs/google-calendar.svg",
+    label: "Meeting Scheduled",
+  },
+  create_jira_ticket: { icon: "/svgs/jira.svg", label: "Ticket Filed" },
+  post_slack_message: { icon: "/svgs/slack.svg", label: "Team Alerted" },
+  create_google_doc: {
+    icon: "/svgs/google-docs.svg",
+    label: "Runbook Created",
+  },
 };
 
 interface Props {
@@ -18,16 +27,23 @@ interface Props {
 }
 
 export function IncidentCompleteOverlay({ show, toolCalls }: Props) {
-  const [visible, setVisible] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const [prevShow, setPrevShow] = useState(show);
 
+  // Adjust state during render (React-recommended pattern) instead of in an effect
+  if (prevShow !== show) {
+    setPrevShow(show);
+    if (show) setTimedOut(false); // reset timer when show transitions to true
+  }
+
+  // Only call setState in a callback (setTimeout), never synchronously in the effect body
   useEffect(() => {
-    if (!show) { setVisible(false); return; }
-    setVisible(true);
-    // Auto-dismiss after animation completes (~6s)
-    const t = setTimeout(() => setVisible(false), 6200);
+    if (!show) return;
+    const t = setTimeout(() => setTimedOut(true), 6200);
     return () => clearTimeout(t);
   }, [show]);
 
+  const visible = show && !timedOut;
   if (!visible) return null;
 
   const succeeded = toolCalls.filter((tc) => tc.status === "success");
@@ -51,7 +67,9 @@ export function IncidentCompleteOverlay({ show, toolCalls }: Props) {
           {/* Headline */}
           <div className="flex items-center justify-center gap-2.5">
             <img src="/svgs/accept-check.svg" className="w-7 h-7" alt="" />
-            <h2 className="text-xl font-bold text-green-700 tracking-tight">Incident Resolved</h2>
+            <h2 className="text-xl font-bold text-green-700 tracking-tight">
+              Incident Reported
+            </h2>
           </div>
 
           <p className="text-xs text-zinc-400 font-medium uppercase tracking-widest">

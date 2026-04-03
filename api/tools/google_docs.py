@@ -30,10 +30,9 @@ class CreateGoogleDocTool(BaseTool):
 
     async def _mock(self, params: dict) -> dict:
         await self.simulate_latency(600, 1100)
-        doc_id = uuid.uuid4().hex[:20]
         return {
-            "doc_id": doc_id,
-            "doc_url": f"https://docs.google.com/document/d/{doc_id}/edit",
+            "doc_id": "new",
+            "doc_url": "https://docs.new",
             "title": params.get("title"),
             "status": "created",
             "created_at": datetime.utcnow().isoformat() + "Z",

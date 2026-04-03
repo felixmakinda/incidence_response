@@ -16,6 +16,11 @@ class IncomingEmail(BaseModel):
 class TriggerIncidentRequest(BaseModel):
     email_id: Optional[str] = None
     severity: Literal["P0", "P1", "P2"] = "P0"
+    # Full email payload — used when email_id is a real IMAP ID not in mock data
+    from_address: Optional[str] = None
+    from_company: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
 
 
 class ToolCallRecord(BaseModel):

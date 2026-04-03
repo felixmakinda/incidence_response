@@ -1,11 +1,18 @@
 import { API_BASE } from "./constants";
 import type { Incident, MockEmail } from "@/types";
 
-export async function triggerIncident(emailId?: string, severity = "P0"): Promise<{ incident_id: string }> {
+export async function triggerIncident(email?: MockEmail, severity = "P0"): Promise<{ incident_id: string }> {
   const res = await fetch(`${API_BASE}/api/incidents/trigger`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email_id: emailId ?? null, severity }),
+    body: JSON.stringify({
+      email_id: email?.id ?? null,
+      severity,
+      from_address: email?.from_address,
+      from_company: email?.from_company,
+      subject: email?.subject,
+      body: email?.body,
+    }),
   });
   if (!res.ok) throw new Error(`Failed to trigger incident: ${res.statusText}`);
   return res.json();

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import confetti from "canvas-confetti";
+import { EmailTriggerCard } from "@/components/email/EmailTriggerCard";
 import { AutoTriggerPanel } from "@/components/email/AutoTriggerPanel";
 import { AgentStatusBar } from "@/components/agent/AgentStatusBar";
 import { PipelineView } from "@/components/pipeline/PipelineView";
@@ -11,11 +12,13 @@ import { IncidentTimeline } from "@/components/timeline/IncidentTimeline";
 import { IncidentCompleteOverlay } from "@/components/ui/IncidentCompleteOverlay";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useIncidentStream } from "@/hooks/useIncidentStream";
-import { getIncident, listIncidents } from "@/lib/api";
+import { getIncident, listEmails, listIncidents } from "@/lib/api";
+import type { MockEmail } from "@/types";
 import { SEVERITY_COLORS } from "@/lib/constants";
 import clsx from "clsx";
 
 export default function DashboardPage() {
+  const [emails, setEmails] = useState<MockEmail[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const {
@@ -27,8 +30,9 @@ export default function DashboardPage() {
     setRecentIncidents,
   } = useIncidentStore();
 
-  // Poll for new incidents every 10 seconds
+  // Load emails on mount and poll for new incidents every 10 seconds
   useEffect(() => {
+    listEmails().then(setEmails);
     listIncidents().then(setRecentIncidents);
     const id = setInterval(() => listIncidents().then(setRecentIncidents), 10_000);
     return () => clearInterval(id);
@@ -74,11 +78,17 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [agentStatus]);
 
+  function handleIncidentStarted(id: string) {
+    setActiveId(id);
+    listIncidents().then(setRecentIncidents);
+  }
+
   return (
     <div className="flex flex-col h-full gap-4 p-5 overflow-y-auto">
-      {/* Top row: auto-trigger panel + agent status */}
+      {/* Top row: email trigger + auto-trigger + status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 flex flex-col gap-3">
+          <EmailTriggerCard emails={emails} onIncidentStarted={handleIncidentStarted} />
           <AutoTriggerPanel />
         </div>
         <div className="flex flex-col gap-3">

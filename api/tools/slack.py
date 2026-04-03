@@ -33,6 +33,6 @@ class PostSlackMessageTool(BaseTool):
             "message_ts": str(ts),
             "channel": params.get("channel", "#incidents"),
             "status": "posted",
-            "permalink": f"https://meridian.slack.com/archives/C0INCIDENTS/p{str(ts).replace('.', '')}",
+            "permalink": f"https://slack.com/archives/C0INCIDENTS/p{str(ts).replace('.', '')}",
             "mode": "mock",
         }

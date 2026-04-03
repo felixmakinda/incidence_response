@@ -1,13 +1,6 @@
 import uuid
-import random
-import string
 from .base import BaseTool
 from integrations.google_auth import is_authenticated
-
-
-def _mock_meet_code() -> str:
-    segment = lambda n: "".join(random.choices(string.ascii_lowercase, k=n))
-    return f"{segment(3)}-{segment(4)}-{segment(3)}"
 
 
 class CreateMeetLinkTool(BaseTool):
@@ -32,9 +25,8 @@ class CreateMeetLinkTool(BaseTool):
 
     async def _mock(self, params: dict) -> dict:
         await self.simulate_latency(500, 900)
-        meet_url = f"https://meet.google.com/{_mock_meet_code()}"
         return {
-            "meet_url": meet_url,
+            "meet_url": "https://meet.google.com/new",
             "meeting_id": str(uuid.uuid4()),
             "status": "created",
             "title": params.get("meeting_title", "Incident War Room"),

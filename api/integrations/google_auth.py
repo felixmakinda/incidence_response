@@ -24,7 +24,7 @@ SCOPES = [
 ]
 
 TOKEN_PATH = Path(os.getenv("GOOGLE_TOKEN_PATH", ".google_token.json"))
-_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
+_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/dashboard")
 
 
 def _client_config() -> Optional[dict]:
@@ -48,7 +48,10 @@ def get_credentials() -> Optional[Credentials]:
     creds: Optional[Credentials] = None
 
     if TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+        try:
+            creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+        except Exception:
+            return None
 
     if creds and creds.valid:
         return creds
