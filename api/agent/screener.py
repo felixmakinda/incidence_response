@@ -5,9 +5,12 @@ represents a genuine production incident before triggering the full agent.
 """
 
 import os
+
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL")
+)
 
 SCREENER_PROMPT = """\
 You are an incident classification assistant for Meridian SaaS, a B2B SaaS platform.
@@ -71,6 +74,7 @@ async def screen_email(
     )
 
     import json
+
     raw = response.choices[0].message.content or "{}"
     result = json.loads(raw)
 

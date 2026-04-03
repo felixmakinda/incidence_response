@@ -1,40 +1,34 @@
-import uuid
-from datetime import datetime
+import asyncio
+
+from integrations.gmail_client import list_inbox_emails, send_reply
+
 from .base import BaseTool
-from integrations.google_auth import is_authenticated
 
 
 class GmailReplyTool(BaseTool):
     name = "gmail_reply"
-    display_name = "Gmail"
+    display_name = "Gmail Reply"
     depends_on = []
 
     async def execute(self, params: dict) -> dict:
-        if is_authenticated():
-            return await self._real(params)
-        return await self._mock(params)
-
-    async def _real(self, params: dict) -> dict:
-        import asyncio
-        from integrations.gmail_client import send_reply
         result = await asyncio.to_thread(
             send_reply,
-            to=params["to"],
+            to_email=params["to"],
             subject=params.get("subject", ""),
             body=params["body"],
             thread_id=params.get("thread_id"),
             original_message_id=params.get("original_message_id"),
         )
-        return {**result, "mode": "real"}
+        return result
 
-    async def _mock(self, params: dict) -> dict:
-        await self.simulate_latency(400, 800)
-        return {
-            "message_id": f"msg_{uuid.uuid4().hex[:12]}",
-            "thread_id": f"thread_{uuid.uuid4().hex[:10]}",
-            "status": "sent",
-            "to": params.get("to"),
-            "subject": params.get("subject"),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "mode": "mock",
-        }
+
+class GmailInboxTool(BaseTool):
+    name = "gmail_inbox"
+    display_name = "Gmail Inbox"
+    depends_on = []
+
+    async def execute(self, params: dict) -> dict:
+        max_results = params.get("max_results", 10)
+        unread_only = params.get("unread_only", False)
+        emails = await asyncio.to_thread(list_inbox_emails, max_results, unread_only)
+        return {"emails": emails, "count": len(emails), "status": "success"}
